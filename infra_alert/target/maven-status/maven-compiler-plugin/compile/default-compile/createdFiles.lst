@@ -1,0 +1,17 @@
+com\infraalert\infra_alert\model\Categoria.class
+com\infraalert\infra_alert\service\CategoriaService.class
+com\infraalert\infra_alert\repository\FuncionarioRepository.class
+com\infraalert\infra_alert\service\ReporteService.class
+com\infraalert\infra_alert\service\UsuarioService.class
+com\infraalert\infra_alert\controller\FuncionarioController.class
+com\infraalert\infra_alert\model\Reporte.class
+com\infraalert\infra_alert\model\Usuario.class
+com\infraalert\infra_alert\model\Funcionario.class
+com\infraalert\infra_alert\controller\ReporteController.class
+com\infraalert\infra_alert\repository\UsuarioRepository.class
+com\infraalert\infra_alert\controller\CategoriaController.class
+com\infraalert\infra_alert\InfraAlertApplication.class
+com\infraalert\infra_alert\controller\UsuarioController.class
+com\infraalert\infra_alert\repository\ReporteRepository.class
+com\infraalert\infra_alert\service\FuncionarioService.class
+com\infraalert\infra_alert\repository\CategoriaRepository.class
