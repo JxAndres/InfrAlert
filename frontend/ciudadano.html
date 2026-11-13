@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InfrAlert - Ciudadano</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <nav class="navbar bg-white border-bottom mb-4">
+    <div class="container">
+      <span class="navbar-brand mb-0 h1">InfrAlert</span>
+      <div class="d-flex align-items-center gap-3">
+        <span id="saludo" class="text-muted"></span>
+        <button id="btn-salir" type="button" class="btn btn-outline-secondary btn-sm">Cerrar sesión</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container pb-5">
+    <div class="row g-4">
+      <section class="col-lg-5">
+        <form id="form-reporte" class="card card-body shadow-sm">
+          <h2 class="h5 mb-3">Nuevo reporte</h2>
+          <div class="mb-3">
+            <label for="titulo" class="form-label">Título</label>
+            <input type="text" id="titulo" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label for="descripcion" class="form-label">Descripción</label>
+            <textarea id="descripcion" class="form-control" rows="3" required></textarea>
+          </div>
+          <div class="mb-3">
+            <label for="categoria" class="form-label">Categoría</label>
+            <select id="categoria" class="form-select" required></select>
+          </div>
+          <div class="mb-3">
+            <label for="ubicacion" class="form-label">Ubicación</label>
+            <input type="text" id="ubicacion" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label for="foto" class="form-label">Foto (opcional, JPG o PNG, máx. 2 MB)</label>
+            <input type="file" id="foto" class="form-control" accept="image/jpeg,image/png">
+          </div>
+          <div id="mensaje" class="alert d-none" role="alert"></div>
+          <button type="submit" class="btn btn-primary">Enviar reporte</button>
+        </form>
+      </section>
+
+      <section class="col-lg-7">
+        <h2 class="h5 mb-3">Mis reportes</h2>
+        <div id="lista"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/mock-data.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    const usuario = usuarioActual();
+
+    const ESTILO_ESTADO = { PENDIENTE: "warning", EN_PROCESO: "info", RESUELTO: "success", CANCELADO: "secondary" };
+    const TEXTO_ESTADO = { PENDIENTE: "Pendiente", EN_PROCESO: "En proceso", RESUELTO: "Resuelto", CANCELADO: "Cancelado" };
+
+    function el(etiqueta, clase, texto) {
+      const nodo = document.createElement(etiqueta);
+      if (clase) nodo.className = clase;
+      if (texto !== undefined) nodo.textContent = texto;
+      return nodo;
+    }
+
+    function mostrarMensaje(texto, tipo) {
+      const caja = document.getElementById("mensaje");
+      caja.className = "alert alert-" + tipo;
+      caja.textContent = texto;
+    }
+
+    async function cargarCategorias() {
+      const select = document.getElementById("categoria");
+      const categorias = await listarCategorias();
+      select.replaceChildren();
+      const vacia = el("option", "", "Elige una categoría");
+      vacia.value = "";
+      select.appendChild(vacia);
+      categorias.forEach(c => {
+        const op = el("option", "", c.nombre);
+        op.value = c.id;
+        select.appendChild(op);
+      });
+    }
+
+    async function cargarReportes() {
+      const lista = document.getElementById("lista");
+      lista.replaceChildren();
+      try {
+        const reportes = await listarMisReportes(usuario.id);
+        if (reportes.length === 0) {
+          lista.appendChild(el("p", "text-muted", "Aún no has enviado reportes."));
+          return;
+        }
+        reportes.slice().reverse().forEach(r => {
+          const tarjeta = el("div", "card shadow-sm mb-3");
+          const cuerpo = el("div", "card-body");
+          const cabecera = el("div", "d-flex justify-content-between align-items-start mb-2");
+          cabecera.appendChild(el("h3", "h6 mb-0", r.titulo));
+          cabecera.appendChild(el("span", "badge text-bg-" + (ESTILO_ESTADO[r.estado] || "secondary"),
+                                  TEXTO_ESTADO[r.estado] || r.estado));
+          cuerpo.appendChild(cabecera);
+          cuerpo.appendChild(el("p", "mb-2", r.descripcion));
+          const fecha = new Date(r.fechaCreacion).toLocaleDateString("es-CO");
+          cuerpo.appendChild(el("small", "text-muted d-block",
+            (r.categoria ? r.categoria.nombre : "Sin categoría") + " · " + r.ubicacion + " · " + fecha));
+          // Con la API real se mostraría la imagen desde GET /api/reportes/{id}/evidencia/imagen
+          if (r.evidenciaNombre) {
+            cuerpo.appendChild(el("small", "text-muted d-block", "Foto adjunta: " + r.evidenciaNombre));
+          }
+          tarjeta.appendChild(cuerpo);
+          lista.appendChild(tarjeta);
+        });
+      } catch (err) {
+        lista.appendChild(el("div", "alert alert-danger", err.message));
+      }
+    }
+
+    function iniciar() {
+      document.getElementById("saludo").textContent = "Hola, " + usuario.nombre;
+      document.getElementById("btn-salir").addEventListener("click", cerrarSesion);
+
+      document.getElementById("form-reporte").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const archivo = document.getElementById("foto").files[0];
+        try {
+          if (archivo) validarImagen(archivo);
+
+          const reporte = await crearReporte({
+            titulo: document.getElementById("titulo").value.trim(),
+            descripcion: document.getElementById("descripcion").value.trim(),
+            categoriaId: document.getElementById("categoria").value,
+            ubicacion: document.getElementById("ubicacion").value.trim()
+          });
+          form.reset();
+
+          if (archivo) {
+            try {
+              await subirEvidencia(reporte.id, archivo);
+              mostrarMensaje("Reporte enviado con su foto.", "success");
+            } catch (err) {
+              mostrarMensaje("El reporte se envió, pero la foto no: " + err.message, "warning");
+            }
+          } else {
+            mostrarMensaje("Reporte enviado correctamente.", "success");
+          }
+          await cargarReportes();
+        } catch (err) {
+          mostrarMensaje(err.message, "danger");
+        }
+      });
+
+      cargarCategorias().catch(err => mostrarMensaje(err.message, "danger"));
+      cargarReportes();
+    }
+
+    if (!usuario || usuario.rol !== "ciudadano") {
+      window.location.href = "index.html";
+    } else {
+      iniciar();
+    }
+  </script>
+</body>
+</html>
