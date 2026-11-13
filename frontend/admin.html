@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InfrAlert - Administrador</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <nav class="navbar bg-white border-bottom mb-4">
+    <div class="container">
+      <span class="navbar-brand mb-0 h1">InfrAlert</span>
+      <div class="d-flex align-items-center gap-3">
+        <span id="saludo" class="text-muted"></span>
+        <button id="btn-salir" type="button" class="btn btn-outline-secondary btn-sm">Cerrar sesión</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container pb-5">
+    <div id="mensaje" class="alert alert-danger d-none" role="alert"></div>
+
+    <h2 class="h5 mb-3">Resumen</h2>
+    <div id="tarjetas" class="row g-3 mb-4"></div>
+
+    <div class="row g-4 mb-4">
+      <section class="col-md-6">
+        <h2 class="h6">Reportes por categoría</h2>
+        <div id="por-categoria"></div>
+      </section>
+      <section class="col-md-6">
+        <h2 class="h6">Reportes por funcionario</h2>
+        <div id="por-funcionario"></div>
+      </section>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="h5 mb-0">Todos los reportes</h2>
+      <select id="filtro" class="form-select form-select-sm w-auto" aria-label="Filtrar por estado">
+        <option value="">Todos los estados</option>
+        <option value="PENDIENTE">Pendiente</option>
+        <option value="EN_PROCESO">En proceso</option>
+        <option value="RESUELTO">Resuelto</option>
+        <option value="CANCELADO">Cancelado</option>
+      </select>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm bg-white align-middle">
+        <thead>
+          <tr><th>Título</th><th>Categoría</th><th>Ubicación</th><th>Estado</th><th>Funcionario</th><th>Creado</th></tr>
+        </thead>
+        <tbody id="tabla"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="js/mock-data.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    const usuario = usuarioActual();
+
+    const ESTILO_ESTADO = { PENDIENTE: "warning", EN_PROCESO: "info", RESUELTO: "success", CANCELADO: "secondary" };
+    const TEXTO_ESTADO = { PENDIENTE: "Pendiente", EN_PROCESO: "En proceso", RESUELTO: "Resuelto", CANCELADO: "Cancelado" };
+
+    function el(etiqueta, clase, texto) {
+      const nodo = document.createElement(etiqueta);
+      if (clase) nodo.className = clase;
+      if (texto !== undefined) nodo.textContent = texto;
+      return nodo;
+    }
+
+    function mostrarError(texto) {
+      const caja = document.getElementById("mensaje");
+      caja.textContent = texto;
+      caja.classList.remove("d-none");
+    }
+
+    function dibujarTarjetas(est) {
+      const contenedor = document.getElementById("tarjetas");
+      contenedor.replaceChildren();
+      [
+        ["Total", est.total, "dark"],
+        ["Pendientes", est.pendientes, "warning"],
+        ["En proceso", est.enProceso, "info"],
+        ["Resueltos", est.resueltos, "success"],
+        ["Cancelados", est.cancelados, "secondary"],
+        ["Sin asignar", est.sinAsignar, "primary"]
+      ].forEach(([titulo, valor, color]) => {
+        const col = el("div", "col-6 col-md-4 col-lg-2");
+        const tarjeta = el("div", "card shadow-sm text-center");
+        const cuerpo = el("div", "card-body py-3");
+        cuerpo.appendChild(el("div", "h3 mb-0 text-" + color, String(valor)));
+        cuerpo.appendChild(el("small", "text-muted", titulo));
+        tarjeta.appendChild(cuerpo);
+        col.appendChild(tarjeta);
+        contenedor.appendChild(col);
+      });
+    }
+
+    function dibujarLista(idContenedor, filas) {
+      const contenedor = document.getElementById(idContenedor);
+      contenedor.replaceChildren();
+      if (!filas || filas.length === 0) {
+        contenedor.appendChild(el("p", "text-muted small", "Sin datos."));
+        return;
+      }
+      const lista = el("ul", "list-group");
+      filas.forEach(f => {
+        const item = el("li", "list-group-item d-flex justify-content-between");
+        item.appendChild(el("span", "", String(f.nombre)));
+        item.appendChild(el("span", "badge text-bg-secondary", String(f.cantidad)));
+        lista.appendChild(item);
+      });
+      contenedor.appendChild(lista);
+    }
+
+    let todos = [];
+
+    function dibujarTabla() {
+      const filtro = document.getElementById("filtro").value;
+      const tabla = document.getElementById("tabla");
+      tabla.replaceChildren();
+      const filas = todos.filter(r => !filtro || r.estado === filtro).slice().reverse();
+      if (filas.length === 0) {
+        const fila = el("tr");
+        const celda = el("td", "text-muted", "No hay reportes para mostrar.");
+        celda.colSpan = 6;
+        fila.appendChild(celda);
+        tabla.appendChild(fila);
+        return;
+      }
+      filas.forEach(r => {
+        const fila = el("tr");
+        fila.appendChild(el("td", "", r.titulo));
+        fila.appendChild(el("td", "", r.categoria ? r.categoria.nombre : "-"));
+        fila.appendChild(el("td", "", r.ubicacion));
+        const celdaEstado = el("td");
+        celdaEstado.appendChild(el("span", "badge text-bg-" + (ESTILO_ESTADO[r.estado] || "secondary"),
+                                   TEXTO_ESTADO[r.estado] || r.estado));
+        fila.appendChild(celdaEstado);
+        fila.appendChild(el("td", "", r.funcionario ? r.funcionario.nombre : "Sin asignar"));
+        fila.appendChild(el("td", "", new Date(r.fechaCreacion).toLocaleDateString("es-CO")));
+        tabla.appendChild(fila);
+      });
+    }
+
+    async function cargar() {
+      try {
+        const est = await obtenerEstadisticas();
+        dibujarTarjetas(est);
+        dibujarLista("por-categoria", est.porCategoria);
+        dibujarLista("por-funcionario", est.porFuncionario);
+        todos = await listarTodosReportes();
+        dibujarTabla();
+      } catch (err) {
+        mostrarError(err.message);
+      }
+    }
+
+    if (!usuario || usuario.rol !== "administrador") {
+      window.location.href = "index.html";
+    } else {
+      document.getElementById("saludo").textContent = "Hola, " + usuario.nombre;
+      document.getElementById("btn-salir").addEventListener("click", cerrarSesion);
+      document.getElementById("filtro").addEventListener("change", dibujarTabla);
+      cargar();
+    }
+  </script>
+</body>
+</html>
